@@ -1,12 +1,11 @@
 """Centralized configuration for term-trace.
 
-All hardcoded paths, URLs, and default values should be defined here.
+All hardcoded paths, URLs, and default values are defined here.
 Values can be overridden via environment variables.
 """
 from __future__ import annotations
 import os
 from pathlib import Path
-from typing import Optional
 
 
 class Config:
