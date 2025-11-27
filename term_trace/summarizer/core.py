@@ -6,7 +6,8 @@ from pathlib import Path
 from typing import Callable, List, Dict, Any, Literal, Optional
 from term_trace.summarizer.google_docs import GoogleDocsLogger
 
-SummarizationMode = Literal["markdown", "remote_llm", "custom"]
+SummarizationMode = Literal["markdown",
+                            "openai", "huggingface", "github", "custom"]
 
 
 class JSONLSummarizer:

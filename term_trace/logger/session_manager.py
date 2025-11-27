@@ -1,6 +1,5 @@
 from ..summarizer.core import JSONLSummarizer, SummarizationMode
 from ..summarizer.hf_llm import HuggingFaceSummarizer
-from ..summarizer.gpt_llm import OpenAIGPTSummarizer
 from ..config import Config
 import os
 from pathlib import Path
@@ -49,7 +48,7 @@ def start_session(
     workspace: str,
     session_name: str | None = None,
     summarize: bool = True,
-    summarize_mode: SummarizationMode = "gpt",
+    summarize_mode: SummarizationMode = "openai",
     batch_size: int = 5,
     interval: int = -1
 ):
@@ -60,7 +59,7 @@ def start_session(
         workspace: Name of the workspace to use
         session_name: Optional custom session name
         summarize: Whether to enable live summarization
-        summarize_mode: Summarization mode (markdown, remote_llm, custom)
+        summarize_mode: Summarization mode (markdown, openai, huggingface, github, custom)
         batch_size: Number of entries to batch before summarization
         interval: Time interval in seconds for periodic summarization
     """
@@ -80,8 +79,8 @@ def start_session(
         print(f"Starting live summarization (mode: {summarize_mode})")
         llm_fn = None
 
-        # All LLM providers are treated as "remote_llm" - the mode just specifies which provider
-        if summarize_mode == "remote_llm":
+        # All three LLM providers follow the same pattern
+        if summarize_mode == "huggingface":
             # HuggingFace
             hf_token = os.environ.get("HUGGINGFACE_TOKEN")
             if not hf_token:
@@ -102,7 +101,7 @@ def start_session(
                 llm_fn = _hf_fn
                 summarize_mode = "custom"
 
-        elif summarize_mode in ("gpt", "openai"):
+        elif summarize_mode == "openai":
             # OpenAI GPT
             openai_key = os.environ.get("OPENAI_API_KEY")
             if not openai_key:
@@ -113,12 +112,13 @@ def start_session(
             else:
                 print("Using OpenAI GPT summarizer")
                 try:
-                    gpt = OpenAIGPTSummarizer()
+                    from ..summarizer.generic_llm import create_openai_summarizer
+                    openai = create_openai_summarizer()
 
-                    def _gpt_fn(text: str) -> str:
-                        return gpt.summarize_text(text)
+                    def _openai_fn(text: str) -> str:
+                        return openai.summarize_text(text)
 
-                    llm_fn = _gpt_fn
+                    llm_fn = _openai_fn
                     summarize_mode = "custom"
                 except Exception as e:
                     print(
