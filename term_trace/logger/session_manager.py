@@ -152,13 +152,18 @@ def start_session(
                     summarize = False
 
         # Only create summarizer if we still have summarization enabled
+        # Use workspace-level summary file (not session-level)
+        workspace_summary_file = workspace_path / f"{workspace}_summary.md"
         if summarize:
             summarizer = JSONLSummarizer(
                 str(jsonl_path),
+                summary_file=str(workspace_summary_file),
                 mode=summarize_mode,
                 llm_function=llm_fn,
                 batch_size=batch_size,
-                interval=interval
+                interval=interval,
+                workspace_name=workspace,
+                google_doc_title=f"term-trace: {workspace}"
             )
         else:
             print("Session will record commands and outputs only (no summarization).")
@@ -169,8 +174,7 @@ def start_session(
     print("="*60)
     print(f"JSONL log: {jsonl_path}")
     if summarizer:
-        summary_file = jsonl_path.with_suffix('.md')
-        print(f"Summary:   {summary_file}")
+        print(f"Summary:   {workspace_summary_file} (workspace-level)")
         if hasattr(summarizer, 'google_logger') and summarizer.google_logger:
             doc_url = summarizer.google_logger.get_doc_url()
             print(f"Google Doc: {doc_url}")
