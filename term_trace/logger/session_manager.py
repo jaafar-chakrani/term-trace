@@ -60,7 +60,7 @@ def start_session(
         workspace: Name of the workspace to use
         session_name: Optional custom session name
         summarize: Whether to enable live summarization
-        summarize_mode: Summarization mode (markdown, local_llm, remote_llm, custom)
+        summarize_mode: Summarization mode (markdown, remote_llm, custom)
         batch_size: Number of entries to batch before summarization
         interval: Time interval in seconds for periodic summarization
     """
@@ -80,8 +80,9 @@ def start_session(
         print(f"Starting live summarization (mode: {summarize_mode})")
         llm_fn = None
 
-        # If remote_llm is requested, default to Hugging Face summarizer via the Inference API
+        # All LLM providers are treated as "remote_llm" - the mode just specifies which provider
         if summarize_mode == "remote_llm":
+            # HuggingFace
             hf_token = os.environ.get("HUGGINGFACE_TOKEN")
             if not hf_token:
                 print(
@@ -99,9 +100,10 @@ def start_session(
                     return hf.summarize(entries)
 
                 llm_fn = _hf_fn
+                summarize_mode = "custom"
 
-        # If user explicitly requests GPT/OpenAI summarization, wire our GPT summarizer
         elif summarize_mode in ("gpt", "openai"):
+            # OpenAI GPT
             openai_key = os.environ.get("OPENAI_API_KEY")
             if not openai_key:
                 print(
@@ -109,7 +111,7 @@ def start_session(
                 print("   Only full logs will be recorded.")
                 summarize = False
             else:
-                print("Using OpenAI GPT summarizer (chat completions)")
+                print("Using OpenAI GPT summarizer")
                 try:
                     gpt = OpenAIGPTSummarizer()
 
@@ -125,8 +127,8 @@ def start_session(
                         "   Continuing without LLM summarization. Only full logs will be recorded.")
                     summarize = False
 
-        # GitHub Models support
         elif summarize_mode == "github":
+            # GitHub Models
             github_token = os.environ.get("GITHUB_TOKEN")
             if not github_token:
                 print(
