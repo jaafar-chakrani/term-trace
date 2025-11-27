@@ -23,19 +23,11 @@
 
 ## Installation
 
-### From source
-
 ```console
 $ git clone https://github.com/jaafar-chakrani/term-trace.git
 $ cd term-trace
 $ pip install -e .
 ```
-
-### Dependencies
-
-The following dependencies are automatically installed:
-- `requests` - HTTP client for API calls
-- `google-auth`, `google-auth-oauthlib`, `google-auth-httplib2`, `google-api-python-client` - Google Docs integration
 
 ## Configuration
 
@@ -84,12 +76,7 @@ This launches a new shell session where all commands are automatically logged.
 
 ### Basic Examples
 
-**Start with OpenAI GPT summarization (default):**
-```console
-$ term-trace start --workspace my-project
-```
-
-**Use GitHub Models instead:**
+**Use GitHub Models:**
 ```console
 $ term-trace start --workspace my-project --llm github
 ```
@@ -102,16 +89,6 @@ $ term-trace start --workspace my-project --llm huggingface
 **Markdown only (no LLM):**
 ```console
 $ term-trace start --workspace my-project --llm markdown
-```
-
-**Disable summarization completely:**
-```console
-$ term-trace start --workspace my-project --no-summarize
-```
-
-**Custom session name:**
-```console
-$ term-trace start --workspace my-project --session-name bug-fix-session
 ```
 
 ### Command-line Options
@@ -165,7 +142,9 @@ The viewer features:
 - Tree-based navigation for workspaces and sessions
 - Expandable commands with color-coded exit codes (green=success, red/orange/yellow=errors)
 - Search and filter by command or output text
-- Scrollable output with inline notes highlighted
+
+<img width="1419" height="669" alt="image" src="https://github.com/user-attachments/assets/147dbede-38ff-4864-af8a-2eff598ea84e" />
+
 
 ### Where Files Are Stored
 
