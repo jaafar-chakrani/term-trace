@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 from term_trace.logger.session_manager import start_session
+from term_trace.viewer.app import run_viewer
 
 
 def main():
@@ -23,6 +24,14 @@ def main():
         action="store_true",
         help="Disable live summarization")
 
+    # View command
+    view_parser = subparsers.add_parser(
+        "view", help="View recorded sessions in a TUI")
+    view_parser.add_argument("workspace", nargs="?",
+                             help="Workspace name (optional)")
+    view_parser.add_argument("--session", dest="session",
+                             help="Specific session file name (optional)")
+
     args = parser.parse_args()
 
     if args.command == "start":
@@ -44,6 +53,8 @@ def main():
             summarize_mode=llm_mode)
         # Logs are flushed automatically after shell exits
         print("Session fully completed.")
+    elif args.command == "view":
+        run_viewer(workspace=args.workspace, session=args.session)
 
 
 if __name__ == "__main__":

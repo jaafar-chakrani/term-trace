@@ -11,6 +11,7 @@
 - 🏢 **Workspace organization** - Group related sessions into workspaces
 - 🔄 **Live summarization** - Summaries update in real-time as you work
 - 💬 **Inline notes** - Add annotations directly from your terminal
+- 🖥️ **Interactive TUI viewer** - Browse sessions with a tree-based interface, color-coded exit codes, and search
 
 
 ## Requirements
@@ -151,6 +152,20 @@ $ term-trace summarize
 ```
 
 This is useful when you want to capture a summary at a specific milestone or before switching to a different task, or if you disable the automatic summarization. Note that this command is only possible from within a traced session.
+
+### Viewing Session Logs (TUI Viewer)
+
+Launch an interactive Terminal User Interface to browse and review your session logs:
+
+```console
+$ term-trace view
+```
+
+The viewer features:
+- Tree-based navigation for workspaces and sessions
+- Expandable commands with color-coded exit codes (green=success, red/orange/yellow=errors)
+- Search and filter by command or output text
+- Scrollable output with inline notes highlighted
 
 ### Where Files Are Stored
 
