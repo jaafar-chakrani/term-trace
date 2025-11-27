@@ -142,6 +142,16 @@ $ # Migration completed successfully
 
 Notes are automatically captured and included in both the session log and summaries.
 
+### Triggering Summarization on Demand
+
+By default, summarization happens automatically in batches. To generate a summary immediately at any point from within a traced session:
+
+```console
+$ term-trace summarize
+```
+
+This is useful when you want to capture a summary at a specific milestone or before switching to a different task, or if you disable the automatic summarization. Note that this command is only possible from within a traced session.
+
 ### Where Files Are Stored
 
 All session data is stored in `~/.termtrace/workspaces/<workspace-name>/` (or your custom `TERMTRACE_BASE_DIR`):

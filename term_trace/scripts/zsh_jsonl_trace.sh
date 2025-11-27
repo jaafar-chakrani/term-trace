@@ -8,6 +8,18 @@ _zsh_jsonl_tmp=""
 _zsh_jsonl_cmd=""
 _zsh_jsonl_start=""
 
+# Create a session-local term-trace function with summarize subcommand
+term-trace() {
+    if [[ "$1" == "summarize" ]]; then
+        local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+        echo "{\"type\": \"summarize\", \"timestamp\": \"$timestamp\"}" >> "$JSONL_LOG"
+        echo "Triggering summary generation..."
+    else
+        # Fall back to the real term-trace CLI if it exists
+        command term-trace "$@"
+    fi
+}
+
 # Override the default zle accept-line widget to catch notes
 _zsh_jsonl_accept_line() {
     local cmd="${BUFFER}"
@@ -24,8 +36,8 @@ _zsh_jsonl_accept_line() {
 zle -N accept-line _zsh_jsonl_accept_line
 
 _zsh_jsonl_preexec() {
-    # Only process non-note commands
-    if [[ "$1" != \#* ]]; then
+    # Only process non-note and non-summarize commands
+    if [[ "$1" != \#* && "$1" != "term-trace summarize" ]]; then
         _zsh_jsonl_cmd="$1"
         _zsh_jsonl_start=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         _zsh_jsonl_tmp=$(mktemp "$LOGDIR/output.XXXXXX")

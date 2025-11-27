@@ -105,7 +105,15 @@ class JSONLSummarizer:
                 with self.jsonl_file.open() as f:
                     f.seek(self.last_pos)
                     for line in f:
-                        buffer.append(json.loads(line))
+                        entry = json.loads(line)
+                        # Check for summarize trigger
+                        if entry.get("type") == "summarize":
+                            if buffer:
+                                self._summarize_batch(buffer)
+                                buffer.clear()
+                                last_batch_time = time.time()
+                            continue
+                        buffer.append(entry)
                     self.last_pos = f.tell()
 
             # Check if we have enough entries for a batch
