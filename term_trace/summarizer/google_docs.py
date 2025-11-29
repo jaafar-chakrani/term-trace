@@ -3,7 +3,7 @@ from __future__ import annotations
 import pickle
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -74,8 +74,6 @@ class GoogleDocsLogger:
         if token_path.exists():
             with token_path.open("rb") as token:
                 creds = pickle.load(token)
-                print('Here')
-                print(creds)
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -373,40 +371,221 @@ class GoogleDocsLogger:
         """Get the URL to the Google Doc."""
         return self.doc_url
 
+    def _format_timestamp(self, ts_str: str) -> str:
+        """Convert ISO timestamp to local timezone with nice formatting."""
+        try:
+            # Parse ISO format timestamp (assumed to be UTC)
+            dt = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+            # Convert to local timezone
+            local_dt = dt.astimezone()
+            # Format as: Nov 28, 16:45:30
+            return local_dt.strftime("%b %d, %H:%M:%S")
+        except Exception:
+            return ts_str
+
     def write_entries(self, entries: List[Entry]) -> None:
-        """Format entries in a terminal-style format with proper indentation."""
-        lines: List[str] = []
-        for e in entries:
-            ts = e.get('timestamp', '')
-            if e.get("type") == "note":
-                # Format notes with NOTE: prefix
-                lines.append(f"[{ts}] NOTE: {e['text']}\n")
-            else:
-                # Format like terminal: [timestamp] $ command
-                cmd = e.get('command', '')
-                output = e.get('output', '').rstrip()
-                exit_code = e.get('exit_code', '')
-
-                lines.append(f"[{ts}] $ {cmd}")
-
-                # Indent output with 4 spaces (or tab character)
-                if output:
-                    indented_output = '\n'.join(
-                        '    ' + line for line in output.split('\n'))
-                    lines.append(indented_output)
-
-                # Add exit code on same indent level as output if non-zero
-                if exit_code != 0:
-                    lines.append(f"    [Exit code: {exit_code}]")
-
-                # Add separator between commands
-                lines.append("")
-
-        content = "\n".join(lines)
+        """Format entries in terminal-style with colors and monospace font."""
         if not self._has_expected_sections():
             print("Document missing expected sections; reinitializing structure.")
             self._init_doc_structure()
 
-        appended = self._append_section_content("Full Log", content)
-        if not appended:
-            self._replace_section_content("Full Log", content)
+        # Build the content with styled text requests
+        doc = self.docs_service.documents().get(documentId=self.doc_id).execute()
+        content = doc.get("body", {}).get("content", [])
+
+        # Find the Full Log section end index
+        section_end = None
+        for i, item in enumerate(content):
+            para = item.get("paragraph", {})
+            style = para.get("paragraphStyle", {})
+            elements = para.get("elements", [])
+            if style.get("namedStyleType") == "HEADING_1" and elements:
+                text_run = "".join(e.get("textRun", {}).get(
+                    "content", "") for e in elements).strip()
+                if "full log" in text_run.lower():
+                    # Find next heading or end of doc
+                    for next_item in content[i + 1:]:
+                        next_para = next_item.get("paragraph", {})
+                        next_style = next_para.get("paragraphStyle", {})
+                        if next_style.get("namedStyleType") == "HEADING_1":
+                            section_end = next_item.get("startIndex", 1) - 1
+                            break
+                    if section_end is None:
+                        section_end = content[-1].get("endIndex", 1) - 1
+                    break
+
+        if section_end is None:
+            print("Warning: Full Log section not found")
+            return
+
+        requests = []
+        insert_index = section_end
+
+        for e in entries:
+            ts_original = e.get('timestamp', '')
+            ts_formatted = self._format_timestamp(ts_original)
+
+            if e.get("type") == "note":
+                # Format: [timestamp] NOTE: text
+                note_text = f"[{ts_formatted}] NOTE: {e['text']}\n\n"
+
+                requests.append(
+                    {"insertText": {"location": {"index": insert_index}, "text": note_text}})
+
+                # Style timestamp in gray
+                ts_end = insert_index + len(f"[{ts_formatted}]")
+                requests.append({
+                    "updateTextStyle": {
+                        "range": {"startIndex": insert_index, "endIndex": ts_end},
+                        "textStyle": {
+                            "foregroundColor": {"color": {"rgbColor": {"red": 0.45, "green": 0.45, "blue": 0.45}}},
+                            "weightedFontFamily": {"fontFamily": "Roboto Mono"},
+                            "fontSize": {"magnitude": 10, "unit": "PT"}
+                        },
+                        "fields": "foregroundColor,weightedFontFamily,fontSize"
+                    }
+                })
+
+                # Style NOTE: in orange
+                note_start = ts_end + 1
+                note_end = note_start + 5  # "NOTE:"
+                requests.append({
+                    "updateTextStyle": {
+                        "range": {"startIndex": note_start, "endIndex": note_end},
+                        "textStyle": {
+                            "foregroundColor": {"color": {"rgbColor": {"red": 0.8, "green": 0.5, "blue": 0.0}}},
+                            "weightedFontFamily": {"fontFamily": "Roboto Mono"},
+                            "fontSize": {"magnitude": 10, "unit": "PT"},
+                            "bold": True
+                        },
+                        "fields": "foregroundColor,weightedFontFamily,fontSize,bold"
+                    }
+                })
+
+                # Style rest of note text in default monospace
+                requests.append({
+                    "updateTextStyle": {
+                        "range": {"startIndex": note_end, "endIndex": insert_index + len(note_text) - 2},
+                        "textStyle": {
+                            "weightedFontFamily": {"fontFamily": "Roboto Mono"},
+                            "fontSize": {"magnitude": 10, "unit": "PT"}
+                        },
+                        "fields": "weightedFontFamily,fontSize"
+                    }
+                })
+
+                insert_index += len(note_text)
+            else:
+                # Format command entry
+                cmd = e.get('command', '')
+                output = e.get('output', '').rstrip()
+                exit_code = e.get('exit_code', '')
+
+                # Build command line: [timestamp] $ command
+                cmd_line = f"[{ts_formatted}] $ {cmd}\n"
+                cmd_start = insert_index
+                requests.append(
+                    {"insertText": {"location": {"index": insert_index}, "text": cmd_line}})
+
+                # Style timestamp in gray
+                ts_end = insert_index + len(f"[{ts_formatted}]")
+                requests.append({
+                    "updateTextStyle": {
+                        "range": {"startIndex": insert_index, "endIndex": ts_end},
+                        "textStyle": {
+                            "foregroundColor": {"color": {"rgbColor": {"red": 0.45, "green": 0.45, "blue": 0.45}}},
+                            "weightedFontFamily": {"fontFamily": "Roboto Mono"},
+                            "fontSize": {"magnitude": 10, "unit": "PT"}
+                        },
+                        "fields": "foregroundColor,weightedFontFamily,fontSize"
+                    }
+                })
+
+                # Style $ in green
+                dollar_start = ts_end + 1
+                dollar_end = dollar_start + 1
+                requests.append({
+                    "updateTextStyle": {
+                        "range": {"startIndex": dollar_start, "endIndex": dollar_end},
+                        "textStyle": {
+                            "foregroundColor": {"color": {"rgbColor": {"red": 0.13, "green": 0.59, "blue": 0.13}}},
+                            "weightedFontFamily": {"fontFamily": "Roboto Mono"},
+                            "fontSize": {"magnitude": 11, "unit": "PT"},
+                            "bold": True
+                        },
+                        "fields": "foregroundColor,weightedFontFamily,fontSize,bold"
+                    }
+                })
+
+                # Style command text in blue
+                cmd_text_start = dollar_end + 1
+                cmd_text_end = insert_index + len(cmd_line) - 1
+                requests.append({
+                    "updateTextStyle": {
+                        "range": {"startIndex": cmd_text_start, "endIndex": cmd_text_end},
+                        "textStyle": {
+                            "foregroundColor": {"color": {"rgbColor": {"red": 0.0, "green": 0.4, "blue": 0.8}}},
+                            "weightedFontFamily": {"fontFamily": "Roboto Mono"},
+                            "fontSize": {"magnitude": 10, "unit": "PT"}
+                        },
+                        "fields": "foregroundColor,weightedFontFamily,fontSize"
+                    }
+                })
+
+                insert_index += len(cmd_line)
+
+                # Add output
+                if output:
+                    output_lines = output.split('\n')
+                    indented_output = '\n'.join(
+                        '    ' + line for line in output_lines) + '\n'
+                    requests.append(
+                        {"insertText": {"location": {"index": insert_index}, "text": indented_output}})
+
+                    # Style output in darker gray monospace
+                    requests.append({
+                        "updateTextStyle": {
+                            "range": {"startIndex": insert_index, "endIndex": insert_index + len(indented_output) - 1},
+                            "textStyle": {
+                                "foregroundColor": {"color": {"rgbColor": {"red": 0.35, "green": 0.35, "blue": 0.35}}},
+                                "weightedFontFamily": {"fontFamily": "Roboto Mono"},
+                                "fontSize": {"magnitude": 9, "unit": "PT"}
+                            },
+                            "fields": "foregroundColor,weightedFontFamily,fontSize"
+                        }
+                    })
+
+                    insert_index += len(indented_output)
+
+                # Add exit code if non-zero (red)
+                if exit_code != 0:
+                    exit_text = f"    [Exit code: {exit_code}]\n"
+                    requests.append(
+                        {"insertText": {"location": {"index": insert_index}, "text": exit_text}})
+
+                    requests.append({
+                        "updateTextStyle": {
+                            "range": {"startIndex": insert_index, "endIndex": insert_index + len(exit_text) - 1},
+                            "textStyle": {
+                                "foregroundColor": {"color": {"rgbColor": {"red": 0.8, "green": 0.0, "blue": 0.0}}},
+                                "weightedFontFamily": {"fontFamily": "Roboto Mono"},
+                                "fontSize": {"magnitude": 9, "unit": "PT"},
+                                "bold": True
+                            },
+                            "fields": "foregroundColor,weightedFontFamily,fontSize,bold"
+                        }
+                    })
+
+                    insert_index += len(exit_text)
+
+                # Add blank line separator
+                requests.append(
+                    {"insertText": {"location": {"index": insert_index}, "text": "\n"}})
+                insert_index += 1
+
+        # Execute all styling requests in one batch
+        if requests:
+            self.docs_service.documents().batchUpdate(
+                documentId=self.doc_id,
+                body={"requests": requests}
+            ).execute()
