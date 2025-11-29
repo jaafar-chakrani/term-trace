@@ -41,7 +41,10 @@ def _launch_hook_shell(workspace: str, session_name: str, n_lines: int = 10):
 
         env["ZDOTDIR"] = zdotdir
 
-        subprocess.run(["zsh", "--login", "-i"], check=True, env=env)
+        # Don't raise exception on 130 (normal user interruption)
+        result = subprocess.run(["zsh", "--login", "-i"], env=env)
+        if result.returncode not in (0, 130):
+            raise subprocess.CalledProcessError(result.returncode, result.args)
 
 
 def start_session(
