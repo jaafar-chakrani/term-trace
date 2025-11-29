@@ -374,18 +374,34 @@ class GoogleDocsLogger:
         return self.doc_url
 
     def write_entries(self, entries: List[Entry]) -> None:
+        """Format entries in a terminal-style format with proper indentation."""
         lines: List[str] = []
         for e in entries:
+            ts = e.get('timestamp', '')
             if e.get("type") == "note":
-                lines.append(f"Note: {e['text']}")
+                # Format notes with NOTE: prefix
+                lines.append(f"[{ts}] NOTE: {e['text']}\n")
             else:
-                lines.append(
-                    f"Timestamp: {e['timestamp']}\n"
-                    f"Command: {e['command']}\n"
-                    f"Output:\n{e['output']}\n"
-                    f"Exit code: {e['exit_code']}\n"
-                    "────\n"
-                )
+                # Format like terminal: [timestamp] $ command
+                cmd = e.get('command', '')
+                output = e.get('output', '').rstrip()
+                exit_code = e.get('exit_code', '')
+
+                lines.append(f"[{ts}] $ {cmd}")
+
+                # Indent output with 4 spaces (or tab character)
+                if output:
+                    indented_output = '\n'.join(
+                        '    ' + line for line in output.split('\n'))
+                    lines.append(indented_output)
+
+                # Add exit code on same indent level as output if non-zero
+                if exit_code != 0:
+                    lines.append(f"    [Exit code: {exit_code}]")
+
+                # Add separator between commands
+                lines.append("")
+
         content = "\n".join(lines)
         if not self._has_expected_sections():
             print("Document missing expected sections; reinitializing structure.")
