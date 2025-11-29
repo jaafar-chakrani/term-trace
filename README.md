@@ -1,3 +1,7 @@
+[![License](https://img.shields.io/github/license/jaafar-chakrani/term-trace?color=7EE787&labelColor=0D1117&style=flat-square)](https://github.com/jaafar-chakrani/term-trace/blob/main/LICENSE)
+![Python](https://img.shields.io/badge/python-3.11+-7EE787?style=flat-square&logo=python&logoColor=white)
+![Shell](https://img.shields.io/badge/shell-zsh-7EE787?style=flat-square&logo=gnu-bash&logoColor=white)
+
 # term-trace
 *Trace your terminal sessions, annotate them inline, and generate structured summaries.*
 
