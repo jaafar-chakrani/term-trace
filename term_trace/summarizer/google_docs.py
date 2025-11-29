@@ -42,6 +42,13 @@ class GoogleDocsLogger:
 
         print("Authorizing with Google...")
         self.creds = self._authorize_user()
+        # Print token expiry info
+        if hasattr(self.creds, "expiry") and self.creds.expiry:
+            local_expiry = self.creds.expiry.astimezone()
+            print(
+                f"Google OAuth token expires at: {local_expiry.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+        else:
+            print("Could not determine Google OAuth token expiry.")
         self.docs_service = build("docs", "v1", credentials=self.creds)
         self.drive_service = build("drive", "v3", credentials=self.creds)
 
@@ -76,8 +83,16 @@ class GoogleDocsLogger:
                 creds = pickle.load(token)
 
         if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
+            if creds and creds.expired:
+                if creds.refresh_token:
+                    print("Google OAuth token expired. Attempting to refresh...")
+                    creds.refresh(Request())
+                else:
+                    print(
+                        "Google OAuth token expired and cannot be refreshed. Please authenticate with Google.")
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        str(self.client_secret_path), self.SCOPES)
+                    creds = flow.run_local_server(port=0)
             else:
                 flow = InstalledAppFlow.from_client_secrets_file(
                     str(self.client_secret_path), self.SCOPES)
