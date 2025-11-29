@@ -33,25 +33,32 @@ $ pip install -e .
 
 ### Environment Variables
 
-Create a `.env` file or export variables in your shell (see `.env.example` for the full list):
+Copy `.env.example` to `.env` and customize:
 
 ```bash
-# Required for LLM summarization (choose one or more)
-export OPENAI_API_KEY="sk-..."           # For OpenAI GPT models
-export GITHUB_TOKEN="ghp_..."            # For GitHub Models
-export HUGGINGFACE_TOKEN="hf_..."        # For HuggingFace models
-
-# Optional: Custom model selection
-export OPENAI_MODEL="gpt-4"              # Default: gpt-3.5-turbo
-export GITHUB_MODEL="xai/grok-3-mini"    # Default: xai/grok-3-mini
-export HF_MODEL_NAME="facebook/bart-large-cnn"  # Default: sshleifer/distilbart-cnn-12-6
-
-# Optional: Google Docs integration
-export GOOGLE_CLIENT_SECRET="path/to/credentials.json"
-
-# Optional: Custom data directory
-export TERMTRACE_BASE_DIR="$HOME/.termtrace"  # Default: ~/.termtrace
+cp .env.example .env
 ```
+
+Then edit `.env`:
+```bash
+# API Keys
+OPENAI_API_KEY=sk-...
+GITHUB_TOKEN=ghp_...
+HUGGINGFACE_TOKEN=hf_...
+
+# Google Docs integration
+GOOGLE_CLIENT_SECRET=/path/to/credentials.json
+
+# Custom settings
+OPENAI_MODEL=gpt-4
+TERMTRACE_BASE_DIR=/custom/path
+```
+
+The `.env` file will be loaded automatically from:
+- Current directory (`.env`)
+- `~/.termtrace/.env`
+- Project root
+
 
 ### Google Docs Setup (Optional)
 

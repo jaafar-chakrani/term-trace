@@ -1,11 +1,28 @@
 """Centralized configuration for term-trace.
 
 All hardcoded paths, URLs, and default values are defined here.
-Values can be overridden via environment variables.
+Values can be overridden via environment variables or .env file.
 """
 from __future__ import annotations
 import os
 from pathlib import Path
+
+# Load .env file if it exists
+try:
+    from dotenv import load_dotenv
+    # Look for .env in current directory, home directory, or project root
+    env_paths = [
+        Path.cwd() / ".env",
+        Path.home() / ".termtrace" / ".env",
+        Path(__file__).parent.parent / ".env",
+    ]
+    for env_path in env_paths:
+        if env_path.exists():
+            load_dotenv(env_path)
+            break
+except ImportError:
+    # python-dotenv not installed, skip .env loading
+    pass
 
 
 class Config:
