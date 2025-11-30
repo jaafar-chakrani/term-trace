@@ -598,9 +598,47 @@ class GoogleDocsLogger:
                     {"insertText": {"location": {"index": insert_index}, "text": "\n"}})
                 insert_index += 1
 
-        # Execute all styling requests in one batch
+        # Execute requests in reverse order so indices remain valid
+        # (styling operations reference indices that would be shifted by earlier insertions)
         if requests:
-            self.docs_service.documents().batchUpdate(
-                documentId=self.doc_id,
-                body={"requests": requests}
-            ).execute()
+            try:
+                self.docs_service.documents().batchUpdate(
+                    documentId=self.doc_id,
+                    body={"requests": list(reversed(requests))}
+                ).execute()
+            except Exception as e:
+                # If batch update fails, fall back to inserting plain text without styling
+                print(
+                    f"Warning: failed to write styled entries to Google Docs: {e}")
+                print("Falling back to plain text insertion...")
+
+                # Insert plain text only
+                plain_text_parts = []
+                for e in entries:
+                    ts_formatted = self._format_timestamp(
+                        e.get('timestamp', ''))
+                    if e.get("type") == "note":
+                        plain_text_parts.append(
+                            f"[{ts_formatted}] NOTE: {e['text']}\n\n")
+                    else:
+                        cmd = e.get('command', '')
+                        output = e.get('output', '').rstrip()
+                        exit_code = e.get('exit_code', '')
+
+                        plain_text_parts.append(f"[{ts_formatted}] $ {cmd}\n")
+                        if output:
+                            output_lines = output.split('\n')
+                            indented_output = '\n'.join(
+                                '    ' + line for line in output_lines) + '\n'
+                            plain_text_parts.append(indented_output)
+                        if exit_code != 0:
+                            plain_text_parts.append(
+                                f"    [Exit code: {exit_code}]\n")
+                        plain_text_parts.append("\n")
+
+                plain_text = ''.join(plain_text_parts)
+                self.docs_service.documents().batchUpdate(
+                    documentId=self.doc_id,
+                    body={"requests": [
+                        {"insertText": {"location": {"index": section_end}, "text": plain_text}}]}
+                ).execute()
