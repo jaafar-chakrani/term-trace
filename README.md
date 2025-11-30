@@ -83,6 +83,11 @@ This launches a new shell session where all commands are automatically logged.
 
 ### Basic Examples
 
+**Logging only (Markdown/Google Docs, no LLM summary):**
+```console
+$ term-trace start --workspace my-project
+```
+
 **Use GitHub Models:**
 ```console
 $ term-trace start --workspace my-project --llm github
@@ -91,11 +96,6 @@ $ term-trace start --workspace my-project --llm github
 **Use HuggingFace models:**
 ```console
 $ term-trace start --workspace my-project --llm huggingface
-```
-
-**Markdown only (no LLM):**
-```console
-$ term-trace start --workspace my-project --llm markdown
 ```
 
 ### Command-line Options
@@ -127,15 +127,29 @@ $ # Migration completed successfully
 
 Notes are automatically captured and included in both the session log and summaries.
 
-### Triggering Summarization on Demand
+### Summarization Behavior
 
-By default, summarization happens automatically in batches. To generate a summary immediately at any point from within a traced session:
+All commands are logged to the full log section (Google Docs/Markdown) **immediately** as they are executed, regardless of summarization settings.
+
+By default, automatic summarization (which generates AI summaries of your commands) is **disabled**. You can enable it via `.env` configuration:
+
+```bash
+# In your .env file:
+TERMTRACE_SUMMARIZE_BATCH_SIZE=10    # Summarize every 10 entries
+TERMTRACE_SUMMARIZE_INTERVAL=300     # Or summarize every 5 minutes (300 seconds)
+```
+
+Set `TERMTRACE_SUMMARIZE_BATCH_SIZE=0` and `TERMTRACE_SUMMARIZE_INTERVAL=-1` (defaults) to disable automatic summarization.
+
+#### Triggering Summarization on Demand
+
+To generate a summary immediately at any point from within a traced session:
 
 ```console
 $ term-trace summarize
 ```
 
-This is useful when you want to capture a summary at a specific milestone or before switching to a different task, or if you disable the automatic summarization. Note that this command is only possible from within a traced session.
+This is useful when you want to capture a summary at a specific milestone or before switching to a different task. Note that this command is only possible from within a traced session.
 
 ### Viewing Session Logs (TUI Viewer)
 

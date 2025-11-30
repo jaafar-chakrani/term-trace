@@ -2,6 +2,7 @@ from ..summarizer.core import JSONLSummarizer, SummarizationMode
 from ..summarizer.hf_llm import HuggingFaceSummarizer
 from ..config import Config
 import os
+import logging
 from pathlib import Path
 from datetime import datetime
 import subprocess
@@ -52,8 +53,8 @@ def start_session(
     session_name: str | None = None,
     summarize: bool = True,
     summarize_mode: SummarizationMode = "openai",
-    batch_size: int = 5,
-    interval: int = -1
+    batch_size: int | None = None,
+    interval: int | None = None
 ):
     """
     Start a new term-trace session with optional live summarization.
@@ -73,24 +74,46 @@ def start_session(
     session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
     session_name = session_name or f"session_{session_id}"
 
+    # Set up logging to file for debugging
+    debug_log_file = workspace_path / f"session_{session_id}_debug.log"
+    handlers = [logging.FileHandler(debug_log_file)]
+
+    # Optionally add console handler
+    if Config.DEBUG_LOG_TO_CONSOLE:
+        handlers.append(logging.StreamHandler())
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=handlers,
+        force=True  # Override any existing config
+    )
+
     jsonl_path = workspace_path / f"session_{session_id}.jsonl"
     print(f"Session started: {session_name} in workspace: {workspace}")
 
-    # Start summarizer if requested
-    summarizer = None
-    if summarize:
-        print(f"Starting live summarization (mode: {summarize_mode})")
-        llm_fn = None
+    # Use config defaults if not provided
+    if batch_size is None:
+        batch_size = Config.SUMMARIZE_BATCH_SIZE
+    if interval is None:
+        interval = Config.SUMMARIZE_INTERVAL
 
-        # All three LLM providers follow the same pattern
+    # Always create a logger for full log recording
+    # If summarize=True, we'll try to set up LLM summarization
+    # If that fails or summarize=False, we fall back to markdown mode
+    llm_fn = None
+    actual_mode = summarize_mode
+
+    # Try to set up LLM if summarization is requested
+    if summarize:
         if summarize_mode == "huggingface":
             # HuggingFace
             hf_token = os.environ.get("HUGGINGFACE_TOKEN")
             if not hf_token:
                 print(
-                    "Warning: HUGGINGFACE_TOKEN not set. Continuing without LLM summarization.")
-                print("   Only full logs will be recorded.")
-                summarize = False
+                    "Warning: HUGGINGFACE_TOKEN not set. Using markdown mode for full logs only.")
+                actual_mode = "markdown"
+                llm_fn = None
             else:
                 print("Using HuggingFace summarizer")
                 hf_model = os.environ.get("HF_MODEL_NAME")
@@ -102,87 +125,121 @@ def start_session(
                     return hf.summarize(entries)
 
                 llm_fn = _hf_fn
-                summarize_mode = "custom"
+                actual_mode = "custom"
 
         elif summarize_mode == "openai":
             # OpenAI GPT
             openai_key = os.environ.get("OPENAI_API_KEY")
             if not openai_key:
                 print(
-                    "Warning: OPENAI_API_KEY not set. Continuing without LLM summarization.")
-                print("   Only full logs will be recorded.")
-                summarize = False
+                    "Warning: OPENAI_API_KEY not set. Using markdown mode for full logs only.")
+                actual_mode = "markdown"
+                llm_fn = None
             else:
                 print("Using OpenAI GPT summarizer")
                 try:
                     from ..summarizer.generic_llm import create_openai_summarizer
                     openai = create_openai_summarizer()
 
-                    def _openai_fn(text: str) -> str:
-                        return openai.summarize_text(text)
+                    # Test the connection
+                    print("Testing OpenAI API connection...")
+                    success, message = openai.test_connection()
+                    if not success:
+                        print(f"Warning: OpenAI API test failed: {message}")
+                        print("   Using markdown mode for full logs only.")
+                        actual_mode = "markdown"
+                        llm_fn = None
+                    else:
+                        print(f"    {message}")
 
-                    llm_fn = _openai_fn
-                    summarize_mode = "custom"
+                        def _openai_fn(text: str) -> str:
+                            return openai.summarize_text(text)
+
+                        llm_fn = _openai_fn
+                        actual_mode = "custom"
                 except Exception as e:
                     print(
                         f"Warning: Could not initialize OpenAI summarizer: {e}")
                     print(
-                        "   Continuing without LLM summarization. Only full logs will be recorded.")
-                    summarize = False
+                        "   Using markdown mode for full logs only.")
+                    actual_mode = "markdown"
+                    llm_fn = None
 
         elif summarize_mode == "github":
             # GitHub Models
             github_token = os.environ.get("GITHUB_TOKEN")
             if not github_token:
                 print(
-                    "Warning: GITHUB_TOKEN not set. Continuing without LLM summarization.")
-                print("   Only full logs will be recorded.")
-                summarize = False
+                    "Warning: GITHUB_TOKEN not set. Using markdown mode for full logs only.")
+                actual_mode = "markdown"
+                llm_fn = None
             else:
                 print("Using GitHub Models summarizer")
                 try:
                     from ..summarizer.generic_llm import create_github_models_summarizer
                     github = create_github_models_summarizer()
 
-                    def _github_fn(text: str) -> str:
-                        return github.summarize_text(text)
+                    # Test the connection
+                    print("Testing GitHub Models API connection...")
+                    success, message = github.test_connection()
+                    if not success:
+                        print(
+                            f"Warning: GitHub Models API test failed: {message}")
+                        print("   Using markdown mode for full logs only.")
+                        actual_mode = "markdown"
+                        llm_fn = None
+                    else:
+                        print(f"    {message}")
 
-                    llm_fn = _github_fn
-                    summarize_mode = "custom"
+                        def _github_fn(text: str) -> str:
+                            return github.summarize_text(text)
+
+                        llm_fn = _github_fn
+                        actual_mode = "custom"
                 except Exception as e:
                     print(
                         f"Warning: Could not initialize GitHub Models summarizer: {e}")
                     print(
-                        "   Continuing without LLM summarization. Only full logs will be recorded.")
-                    summarize = False
+                        "   Using markdown mode for full logs only.")
+                    actual_mode = "markdown"
+                    llm_fn = None
 
-        # Only create summarizer if we still have summarization enabled
-        # Use workspace-level summary file (not session-level)
-        workspace_summary_file = workspace_path / f"{workspace}_summary.md"
-        if summarize:
-            summarizer = JSONLSummarizer(
-                str(jsonl_path),
-                summary_file=str(workspace_summary_file),
-                mode=summarize_mode,
-                llm_function=llm_fn,
-                batch_size=batch_size,
-                interval=interval,
-                workspace_name=workspace,
-                google_doc_title=f"term-trace: {workspace}"
-            )
-        else:
-            print("Session will record commands and outputs only (no summarization).")
+    # Always create the logger (for full log recording)
+    # Use workspace-level summary file (not session-level)
+    workspace_summary_file = workspace_path / f"{workspace}_summary.md"
+
+    print(f"\nStarting session logger (mode: {actual_mode})")
+
+    summarizer = JSONLSummarizer(
+        str(jsonl_path),
+        summary_file=str(workspace_summary_file),
+        mode=actual_mode,
+        llm_function=llm_fn,
+        batch_size=batch_size,
+        interval=interval,
+        workspace_name=workspace,
+        google_doc_title=f"term-trace: {workspace}"
+    )
+
+    # Print summarization configuration
+    if batch_size > 0:
+        print(f"Real-time summarization: Every {batch_size} entries")
+    elif interval > 0:
+        print(f"Real-time summarization: Every {interval} seconds")
+    else:
+        print(
+            f"Real-time summarization: Disabled (use 'term-trace summarize' to generate on-demand)")
 
     # Print summary of where logs will be saved
     print("\n" + "="*60)
     print("Session Log Locations:")
     print("="*60)
-    print(f"JSONL log: {jsonl_path}")
-    if summarizer:
-        print(f"Summary:   {workspace_summary_file} (workspace-level)")
-        if hasattr(summarizer, 'google_logger') and summarizer.google_logger:
-            doc_url = summarizer.google_logger.get_doc_url()
-            print(f"Google Doc: {doc_url}")
+    print(f"JSONL log:  {jsonl_path}")
+    print(f"Markdown:   {workspace_summary_file} (workspace-level)")
+    print(f"Debug log:  {debug_log_file}")
+    if hasattr(summarizer, 'google_logger') and summarizer.google_logger:
+        doc_url = summarizer.google_logger.get_doc_url()
+        print(f"Google Doc: {doc_url}")
     print("="*60 + "\n")
 
     try:

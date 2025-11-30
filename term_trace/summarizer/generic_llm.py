@@ -110,6 +110,51 @@ class GenericChatSummarizer(LLMSummarizer):
         self.max_tokens = int(max_tokens)
         self.timeout = int(timeout)
 
+    def test_connection(self) -> tuple[bool, str]:
+        """Test if the API token and endpoint are working.
+
+        Returns:
+            (success, message) tuple
+        """
+        if not self.api_token:
+            return False, f"API token not found (checked env var: {self.token_env_var})"
+
+        # Send a minimal test request
+        test_messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "Say 'ok'"}
+        ]
+
+        payload = {
+            "model": self.model_name,
+            "messages": test_messages,
+            "temperature": 0,
+            "max_tokens": 5,
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self.api_token}",
+            "Content-Type": "application/json",
+        }
+
+        try:
+            resp = requests.post(
+                self.api_url,
+                headers=headers,
+                json=payload,
+                timeout=10
+            )
+            resp.raise_for_status()
+            return True, "Connection successful"
+        except requests.HTTPError as e:
+            try:
+                error_body = resp.json()
+            except Exception:
+                error_body = resp.text if resp is not None else "No response"
+            return False, f"API error (HTTP {resp.status_code}): {error_body}"
+        except Exception as e:
+            return False, f"Connection failed: {e}"
+
     # Unified prompt configuration
     SYSTEM_PROMPT = (
         "You are a terminal session summarizer. Create a concise bullet-point summary "
