@@ -106,6 +106,26 @@ class Config:
         "~/.zshrc"
     )
 
+    # Summarization configuration
+    # batch_size: Number of entries to batch before summarization (0 = disabled)
+    SUMMARIZE_BATCH_SIZE: int = int(os.environ.get(
+        "TERMTRACE_SUMMARIZE_BATCH_SIZE",
+        "0"
+    ))
+
+    # interval: Time interval in seconds for periodic summarization (-1 = disabled)
+    SUMMARIZE_INTERVAL: int = int(os.environ.get(
+        "TERMTRACE_SUMMARIZE_INTERVAL",
+        "-1"
+    ))
+
+    # Debug logging configuration
+    # Whether to print debug logs to console in addition to log file
+    DEBUG_LOG_TO_CONSOLE: bool = os.environ.get(
+        "TERMTRACE_DEBUG_LOG_TO_CONSOLE",
+        "false"
+    ).lower() in ("true", "1", "yes")
+
     @classmethod
     def ensure_directories(cls) -> None:
         """Create necessary directories if they don't exist."""
